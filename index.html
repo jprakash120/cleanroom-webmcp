@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cleanroom — investigate sensitive data with an agent</title>
+  <meta name="description"
+        content="A browser-native WebMCP workspace where an analyst and an AI agent investigate sensitive datasets together. The raw file never leaves the browser; every disclosure is gated and logged." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+        rel="stylesheet" />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- top bar -->
+    <header class="topbar">
+      <div class="wordmark">
+        <span class="mark">CLEAN<b>ROOM</b></span>
+        <span class="tag">webmcp · investigate sensitive data together</span>
+      </div>
+      <div class="status-row" id="statusRow">
+        <span class="chip" id="chipWebmcp"><span class="dot"></span>WebMCP: checking…</span>
+        <span class="chip" id="chipEngine"><span class="dot"></span>DuckDB: booting…</span>
+        <span class="chip" id="chipTools"><span class="dot"></span>tools: 0</span>
+        <span class="chip" id="chipData"><span class="dot"></span>no dataset</span>
+      </div>
+    </header>
+
+    <div class="body">
+      <!-- LEFT: local data -->
+      <section class="col left">
+        <div class="panel">
+          <div class="panel-head">
+            <span class="eyebrow"><span class="accent-local">◆</span> Local data · your browser</span>
+          </div>
+          <p class="side-note">The raw file is loaded into DuckDB-WASM in this tab. It is not uploaded anywhere.</p>
+
+          <button class="btn primary full" id="btnSample">Load sample production data</button>
+          <button class="btn ghost full" id="btnUpload" style="margin-top:8px;">Open a CSV / Parquet file…</button>
+          <input type="file" id="fileInput" accept=".csv,.tsv,.parquet" hidden />
+
+          <div id="datasetCard" class="dataset-card" hidden>
+            <div class="name" id="dsName">—</div>
+            <div class="meta" id="dsMeta">—</div>
+            <div class="contained-badge">◆ contained locally</div>
+          </div>
+
+          <div class="schema-list" id="schemaList"></div>
+
+          <div class="tool-status" id="toolStatus" hidden>
+            <div class="eyebrow" style="margin-bottom:8px;">Tools exposed to agent</div>
+            <div id="toolPills"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CENTER: workspace -->
+      <section class="col center">
+        <div class="panel workspace">
+          <div class="panel-head">
+            <span class="eyebrow"><span class="accent-local">◆</span> Workspace · results stay on this side</span>
+          </div>
+
+          <div class="sql-wrap">
+            <textarea class="sql-editor" id="sqlEditor" spellcheck="false"
+              placeholder="SELECT shift, line_id, sum(actual_units) AS units&#10;FROM runs GROUP BY shift, line_id ORDER BY units;"></textarea>
+            <div class="sql-bar">
+              <span class="hint">read-only · SELECT / WITH · ⌘/Ctrl+Enter to run</span>
+              <span class="spacer"></span>
+              <button class="btn" id="btnRun">Run query</button>
+            </div>
+          </div>
+
+          <div id="exampleChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+
+          <div class="result-meta" id="resultMeta"></div>
+
+          <div class="grid-scroll" id="gridScroll">
+            <div class="empty">
+              <div>
+                <div class="big">No data loaded yet</div>
+                <div>Load the sample production data to start an investigation.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: disclosure boundary -->
+      <section class="col right">
+        <div class="panel" id="ledgerPanel">
+          <div class="panel-head">
+            <span class="eyebrow"><span class="accent-shared">▲</span> Disclosure log · crossed to the agent</span>
+          </div>
+          <p class="side-note">Everything the agent received, and everything it was denied. This is the boundary.</p>
+
+          <div class="ledger-summary">
+            <div class="tally agg"><div class="n" id="tallyAgg">0</div><div class="k">aggregates</div></div>
+            <div class="tally raw"><div class="n" id="tallyRaw">0</div><div class="k">raw rows</div></div>
+            <div class="tally denied"><div class="n" id="tallyDenied">0</div><div class="k">denied</div></div>
+          </div>
+
+          <div class="ledger" id="ledger">
+            <div class="side-note" id="ledgerEmpty">Nothing has crossed the boundary yet.</div>
+          </div>
+        </div>
+
+        <div class="panel" id="hypPanel">
+          <div class="panel-head">
+            <span class="eyebrow">◇ Hypotheses · reproducible from SQL</span>
+          </div>
+          <div class="hyp-list" id="hypList">
+            <div class="side-note" id="hypEmpty">The agent's hypotheses and your corrections will appear here.</div>
+          </div>
+          <button class="btn ghost full" id="btnExport" style="margin-top:12px;" hidden>Export investigation report</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

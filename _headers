@@ -1,0 +1,9 @@
+# Cross-origin isolation lets DuckDB-WASM use its faster multi-threaded build.
+# `credentialless` keeps cross-origin CDN + Google Fonts loading without extra
+# headers on those origins. Read by Netlify and Cloudflare Pages.
+#
+# If DuckDB ever fails to load on your host, delete the Embedder-Policy line:
+# the app falls back to the single-threaded build, which needs no isolation.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
