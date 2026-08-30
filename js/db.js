@@ -51,6 +51,49 @@ export async function loadCsvText(name, text) {
   return getSchema();
 }
 
+// Preferred path for user-picked CSVs, including large / messy ones. Registers the
+// File itself so DuckDB reads it lazily via the browser FileReader instead of us
+// materializing the whole file as a JS string (which roughly doubles memory).
+// Parsing is error-tolerant; if type inference still fails on a genuinely broken
+// file, it falls back to loading every column as text so the data is at least
+// queryable. Returns { schema, degraded }.
+export async function loadCsvFile(file) {
+  const name = file.name;
+  const safe = name.replace(/'/g, "''");
+  try { await db.dropFiles(); } catch { /* nothing registered yet */ }
+  await conn.query(`DROP TABLE IF EXISTS ${TABLE}`);
+  await db.registerFileHandle(
+    name,
+    file,
+    duckdb.DuckDBDataProtocol.BROWSER_FILEREADER,
+    true
+  );
+
+  const opts =
+    `header = true, sample_size = -1, ignore_errors = true, null_padding = true`;
+  let degraded = false;
+  try {
+    await conn.query(
+      `CREATE TABLE ${TABLE} AS SELECT * FROM read_csv('${safe}', ${opts})`
+    );
+  } catch (e) {
+    // Last resort: don't let type inference break the load.
+    await conn.query(`DROP TABLE IF EXISTS ${TABLE}`);
+    await conn.query(
+      `CREATE TABLE ${TABLE} AS SELECT * FROM read_csv('${safe}', ${opts}, all_varchar = true)`
+    );
+    degraded = true;
+  }
+  schemaCache = null;
+  return { schema: await getSchema(), degraded };
+}
+
+export async function rowCount() {
+  if (!(await tableExists())) return 0;
+  const res = await conn.query(`SELECT count(*) AS n FROM ${TABLE}`);
+  return Number(res.toArray()[0].n);
+}
+
 export async function loadParquetBuffer(name, uint8) {
   await conn.query(`DROP TABLE IF EXISTS ${TABLE}`);
   await db.registerFileBuffer(`${name}`, uint8);

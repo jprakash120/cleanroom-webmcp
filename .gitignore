@@ -14,3 +14,8 @@ npm-debug.log*
 # local artifacts
 cleanroom-investigation.json
 *.local
+
+# large / messy datasets are for the file picker, not the repo
+data/production_runs_large.csv
+data/*_large.csv
+*.parquet

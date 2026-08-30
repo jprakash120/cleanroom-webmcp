@@ -21,11 +21,13 @@ import {
 
 export const K_ANON = 5; // minimum group size for any aggregate or sample
 
-// Columns considered sensitive by default for the demo dataset. The human can
-// toggle any column's sensitivity in the UI at runtime.
-const DEFAULT_SENSITIVE = new Set(["operator_id"]);
+// Columns whose NAME suggests they identify a person are marked sensitive by
+// default, so the gate does the right thing on an arbitrary uploaded dataset, not
+// just the demo data. The human can toggle any column in the UI at runtime.
+const SENSITIVE_HINT =
+  /(operator|employee|worker|staff|person|(^|_)name($|_)|full[_ ]?name|email|phone|mobile|ssn|social|passport|user|customer|patient|account|address)/i;
 
-let sensitive = new Set(DEFAULT_SENSITIVE);
+let sensitive = new Set();
 
 export function getSensitiveColumns() {
   return [...sensitive];
@@ -217,9 +219,7 @@ export async function requestRawDisclosure(req) {
 }
 
 export function resetSensitive(fromColumns) {
-  // Keep any default-sensitive columns that exist; drop the rest.
-  sensitive = new Set(
-    [...DEFAULT_SENSITIVE].filter((c) => fromColumns.includes(c))
-  );
+  // Mark any column whose name looks person-identifying. The analyst can adjust.
+  sensitive = new Set(fromColumns.filter((c) => SENSITIVE_HINT.test(c)));
   emit();
 }

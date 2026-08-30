@@ -23,15 +23,15 @@ Run:  python3 generate_data.py
 Out:  production_runs.csv
 """
 
+import argparse
 import csv
 import random
 from datetime import date, timedelta
 
 SEED = 20260903          # submission deadline, for luck
-random.seed(SEED)
 
 START = date(2026, 6, 1)
-DAYS = 62                 # ~2 months of runs
+DAYS = 62                 # ~2 months of runs (default, committed sample)
 SHIFTS = ["A", "B", "C"]  # A=day, B=swing, C=night
 LINES = ["LINE-1", "LINE-2", "LINE-3"]
 SKUS = ["COLA-12OZ", "LEMON-16OZ", "SPRING-1L", "ENERGY-8OZ", "TONIC-10OZ"]
@@ -151,41 +151,90 @@ def make_run(run_id: int, d: date, shift: str, line: str):
     }
 
 
+def messify(row):
+    """Introduce realistic dirt so the loader's error-tolerant path gets exercised.
+    Only used with --messy. The LINE-2 fault story stays intact for the values that
+    matter, but formatting, blanks, and stray types show up the way real exports do."""
+    # stray whitespace / inconsistent casing on the SKU
+    if random.random() < 0.15:
+        row["product_sku"] = f"  {row['product_sku']} "
+    # blank out low-importance fields sometimes (missing values)
+    if random.random() < 0.06:
+        row["fill_temp_c"] = ""
+    if random.random() < 0.05:
+        row["downtime_reason"] = ""
+    if random.random() < 0.04:
+        row["operator_id"] = ""
+    # occasional non-numeric junk in a numeric column
+    if random.random() < 0.02:
+        row["reject_units"] = random.choice(["n/a", "NaN", "-"])
+    # inconsistent date format on a minority of rows
+    if random.random() < 0.08:
+        y, m, dd = row["run_date"].split("-")
+        row["run_date"] = f"{m}/{dd}/{y}"
+    # inconsistent boolean spelling
+    if random.random() < 0.05:
+        row["qa_pass"] = random.choice(["Y", "N", "TRUE", "FALSE", "1", "0"])
+    return row
+
+
 def main():
+    ap = argparse.ArgumentParser(description="Generate synthetic production runs.")
+    ap.add_argument("--rows", type=int, default=None,
+                    help="approximate target row count (scales batches to hit it)")
+    ap.add_argument("--days", type=int, default=DAYS, help="number of days of runs")
+    ap.add_argument("--batches", type=int, default=1,
+                    help="production batches per line per shift per day")
+    ap.add_argument("--messy", action="store_true",
+                    help="inject missing values, bad types, and inconsistent formats")
+    ap.add_argument("--out", default="production_runs.csv", help="output CSV path")
+    ap.add_argument("--seed", type=int, default=SEED)
+    args = ap.parse_args()
+    random.seed(args.seed)
+
+    days = args.days
+    batches = args.batches
+    # If a target row count is given, scale batches (keeping the date range readable).
+    if args.rows:
+        days = max(days, 365)
+        per_day = len(LINES) * len(SHIFTS) * 0.95
+        batches = max(1, round(args.rows / (days * per_day)))
+
     rows = []
     run_id = 50000
-    for day_offset in range(DAYS):
+    for day_offset in range(days):
         d = START + timedelta(days=day_offset)
-        # Sunday is maintenance-only: fewer runs
         weekday = d.weekday()
-        shifts_today = SHIFTS if weekday != 6 else ["A"]
+        shifts_today = SHIFTS if weekday != 6 else ["A"]  # Sunday = maintenance only
         for shift in shifts_today:
             for line in LINES:
-                # occasional line not scheduled
-                if random.random() < 0.05:
-                    continue
-                run_id += 1
-                rows.append(make_run(run_id, d, shift, line))
+                for _ in range(batches):
+                    if random.random() < 0.05:  # occasional line not scheduled
+                        continue
+                    run_id += 1
+                    row = make_run(run_id, d, shift, line)
+                    if args.messy:
+                        row = messify(row)
+                    rows.append(row)
 
     fields = list(rows[0].keys())
-    with open("production_runs.csv", "w", newline="") as f:
+    with open(args.out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)
 
     # Console summary so the generator is self-documenting.
-    total_planned = sum(r["planned_units"] for r in rows)
-    total_actual = sum(r["actual_units"] for r in rows)
-    faulted = [r for r in rows
-               if r["line_id"] == "LINE-2" and r["shift"] == "C"
-               and date(2026, 7, 20) <= date.fromisoformat(r["run_date"]) <= date(2026, 8, 2)]
-    print(f"wrote production_runs.csv  rows={len(rows)}")
-    print(f"overall attainment = {total_actual/total_planned:0.1%}")
-    if faulted:
-        fp = sum(r["actual_units"] for r in faulted)
-        pp = sum(r["planned_units"] for r in faulted)
-        print(f"LINE-2 C-shift fault window attainment = {fp/pp:0.1%} "
-              f"({len(faulted)} runs) <- the hidden root cause")
+    def num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+    total_planned = sum(num(r["planned_units"]) for r in rows)
+    total_actual = sum(num(r["actual_units"]) for r in rows)
+    print(f"wrote {args.out}  rows={len(rows):,}  messy={args.messy}")
+    if total_planned:
+        print(f"overall attainment = {total_actual/total_planned:0.1%}")
+    print("Tip: large/messy files are for the file picker — do not commit them.")
 
 
 if __name__ == "__main__":

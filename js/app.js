@@ -9,7 +9,9 @@
 import {
   initDb,
   loadCsvText,
+  loadCsvFile,
   loadParquetBuffer,
+  rowCount,
   getSchema,
   columnNames,
 } from "./db.js";
@@ -176,10 +178,13 @@ async function onFilePicked(e) {
     if (file.name.toLowerCase().endsWith(".parquet")) {
       const buf = new Uint8Array(await file.arrayBuffer());
       await loadParquetBuffer(file.name, buf);
-      await afterLoad(file.name, `${(file.size / 1024).toFixed(0)} KB · parquet`);
+      await afterLoad(file.name, "parquet");
     } else {
-      const text = await file.text();
-      await ingestCsv(file.name, text);
+      const { degraded } = await loadCsvFile(file);
+      await afterLoad(file.name, "csv");
+      if (degraded) {
+        toast("Loaded as text — column types couldn't be inferred on this file.");
+      }
     }
   } catch (err) {
     console.error(err);
@@ -191,25 +196,34 @@ async function onFilePicked(e) {
 
 async function ingestCsv(name, text) {
   await loadCsvText(name, text);
-  const rows = text.trim().split("\n").length - 1;
-  await afterLoad(name, `${rows.toLocaleString()} runs · csv`);
+  await afterLoad(name, "csv");
 }
 
-async function afterLoad(name, meta) {
+async function afterLoad(name, kind) {
   ws.setDatasetName(name);
   currentColumns = await columnNames();
   privacy.resetSensitive(currentColumns);
 
+  const n = await rowCount();
   $("datasetCard").hidden = false;
   $("dsName").textContent = name;
-  $("dsMeta").textContent = meta;
+  $("dsMeta").textContent = `${n.toLocaleString()} rows · ${currentColumns.length} cols · ${kind}`;
   setChip("chipData", "live", name.length > 22 ? name.slice(0, 20) + "…" : name);
   $("toolStatus").hidden = false;
   $("btnExport").hidden = false;
 
   await renderSchema();
-  // Prime the workspace with a first look.
-  $("sqlEditor").value = EXAMPLES[1].sql;
+
+  // Example chips only make sense for the sample schema; hide them otherwise.
+  const isSampleSchema = ["shift", "line_id", "actual_units"].every((c) =>
+    currentColumns.includes(c)
+  );
+  $("exampleChips").style.display = isSampleSchema ? "flex" : "none";
+
+  // Prime the workspace with a first look that fits whatever was loaded.
+  $("sqlEditor").value = isSampleSchema
+    ? EXAMPLES[1].sql
+    : "SELECT * FROM runs LIMIT 200;";
   await runEditorSql();
   toast(`<b>${name}</b> contained locally`);
 }
