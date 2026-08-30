@@ -225,7 +225,9 @@ export async function runReadOnly(sql, { rowLimit = MAX_ROWS } = {}) {
   const check = validateReadOnly(sql);
   if (!check.ok) throw new Error(check.reason);
   const cap = Math.min(rowLimit, MAX_ROWS);
-  const wrapped = `SELECT * FROM (\n${sql}\n) AS _q LIMIT ${cap + 1}`;
+  // A trailing ';' would land inside the row-cap subquery below and break parsing.
+  const cleaned = sql.trim().replace(/;+\s*$/, "");
+  const wrapped = `SELECT * FROM (\n${cleaned}\n) AS _q LIMIT ${cap + 1}`;
   const res = await withTimeout(conn.query(wrapped), QUERY_TIMEOUT_MS, "Query");
   let rows = rowsToPlain(res);
   const truncated = rows.length > cap;
