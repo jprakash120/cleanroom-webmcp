@@ -1,9 +1,9 @@
-// app.js — the human's side of the room.
+﻿// app.js â€” the human's side of the room.
 //
 // Boots DuckDB-WASM, registers the WebMCP tools, and renders the interface the
 // analyst drives: file loading, SQL editor, results grid with row selection, the
 // live disclosure log, and the hypothesis cards. It also installs the two hooks
-// the tools depend on — how to draw a result, and how the disclosure gate asks
+// the tools depend on â€” how to draw a result, and how the disclosure gate asks
 // the human for approval.
 
 import {
@@ -54,6 +54,9 @@ const EXAMPLES = [
 ];
 
 let currentColumns = [];
+let revealSensitiveEnabled = false;
+const pseudonyms = new Map();
+let pseudonymCounter = 0;
 
 // ---- boot ---------------------------------------------------------------------
 
@@ -183,7 +186,7 @@ async function onFilePicked(e) {
       const { degraded } = await loadCsvFile(file);
       await afterLoad(file.name, "csv");
       if (degraded) {
-        toast("Loaded as text — column types couldn't be inferred on this file.");
+        toast("Loaded as text â€” column types couldn't be inferred on this file.");
       }
     }
   } catch (err) {
@@ -207,8 +210,8 @@ async function afterLoad(name, kind) {
   const n = await rowCount();
   $("datasetCard").hidden = false;
   $("dsName").textContent = name;
-  $("dsMeta").textContent = `${n.toLocaleString()} rows · ${currentColumns.length} cols · ${kind}`;
-  setChip("chipData", "live", name.length > 22 ? name.slice(0, 20) + "…" : name);
+  $("dsMeta").textContent = `${n.toLocaleString()} rows Â· ${currentColumns.length} cols Â· ${kind}`;
+  setChip("chipData", "live", name.length > 22 ? name.slice(0, 20) + "â€¦" : name);
   $("toolStatus").hidden = false;
   $("btnExport").hidden = false;
 
@@ -236,7 +239,7 @@ async function renderSchema() {
   list.innerHTML = "";
   const head = el("div", "eyebrow");
   head.style.margin = "6px 0 8px";
-  head.textContent = `Schema · ${schema.length} columns`;
+  head.textContent = `Schema Â· ${schema.length} columns`;
   list.appendChild(head);
 
   schema.forEach((col) => {
@@ -297,6 +300,27 @@ function renderGrid(result) {
     updateResultMeta(result);
     return;
   }
+  const hasSensitiveCol = result.columns.some((c) => privacy.isSensitive(c));
+  if (hasSensitiveCol) {
+    const controls = el("div", "grid-controls");
+    const label = el("label", "reveal-toggle");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = revealSensitiveEnabled;
+    cb.addEventListener("change", () => {
+      revealSensitiveEnabled = cb.checked;
+      renderGrid(ws.getLastResult());
+    });
+    label.appendChild(cb);
+    label.appendChild(
+      document.createTextNode(
+        " Reveal sensitive values (local only — never sent to the agent)"
+      )
+    );
+    controls.appendChild(label);
+    scroll.appendChild(controls);
+  }
+
   const table = el("table", "grid");
   const thead = el("thead");
   const htr = el("tr");
@@ -313,7 +337,7 @@ function renderGrid(result) {
     const tr = el("tr");
     tr.dataset.index = i;
     result.columns.forEach((c) => {
-      const td = el("td", null, formatCell(row[c]));
+      const td = el("td", null, cellDisplayValue(c, row[c]));
       td.dataset.col = c;
       tr.appendChild(td);
     });
@@ -344,11 +368,29 @@ function updateResultMeta(result) {
     `<span class="hot">${result.rowCount}</span> rows shown`,
     result.truncated ? `<span class="warn">capped at ${result.rowCount}</span>` : "",
     sel ? `<span class="hot">${sel}</span> selected` : `click rows to select`,
-    `query <span class="hot">${result.queryId || "—"}</span>`,
+    `query <span class="hot">${result.queryId || "â€”"}</span>`,
   ].filter(Boolean);
-  meta.innerHTML = parts.join(" &nbsp;·&nbsp; ");
+  meta.innerHTML = parts.join(" &nbsp;Â·&nbsp; ");
 }
 
+function pseudonymFor(rawValue) {
+  const key = String(rawValue);
+  if (!pseudonyms.has(key)) {
+    const letter = String.fromCharCode(65 + (pseudonymCounter % 26));
+    pseudonymCounter += 1;
+    pseudonyms.set(key, `Value ${letter}`);
+  }
+  return pseudonyms.get(key);
+}
+
+function cellDisplayValue(col, raw) {
+  // Sensitive columns never render their real value in the shared grid
+  // unless the analyst has locally enabled reveal.
+  if (privacy.isSensitive(col) && !revealSensitiveEnabled) {
+    return raw === null || raw === undefined ? String.fromCharCode(0x2205) : pseudonymFor(raw);
+  }
+  return formatCell(raw);
+}
 function formatCell(v) {
   if (v === null || v === undefined) return "∅";
   if (typeof v === "number") {
@@ -518,14 +560,14 @@ function showApprovalModal(request, resolve) {
       <div class="disclosure-line"><span class="k">columns</span><span class="v mono">${request.columns.map(escapeHtml).join(", ")}</span></div>
       ${
         hasSensitive
-          ? `<div class="sensitive-warn"><span>▲</span><div><b>Sensitive columns included.</b> This request contains<span class="chip-list">${request.sensitiveColumns
+          ? `<div class="sensitive-warn"><span>â–²</span><div><b>Sensitive columns included.</b> This request contains<span class="chip-list">${request.sensitiveColumns
               .map((s) => `<span class="s">${escapeHtml(s)}</span>`)
-              .join("")}</span> — individual-level data that will leave the browser if approved.</div></div>`
+              .join("")}</span> â€” individual-level data that will leave the browser if approved.</div></div>`
           : ""
       }
       ${
         request.belowKAnon
-          ? `<div class="sensitive-warn" style="margin-top:8px;"><span>▲</span><div>Fewer than <b>${privacy.K_ANON}</b> rows — a set this small can identify individuals. Consider an aggregate instead.</div></div>`
+          ? `<div class="sensitive-warn" style="margin-top:8px;"><span>â–²</span><div>Fewer than <b>${privacy.K_ANON}</b> rows â€” a set this small can identify individuals. Consider an aggregate instead.</div></div>`
           : ""
       }
     </div>
