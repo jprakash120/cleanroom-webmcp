@@ -5,9 +5,10 @@ investigating **sensitive** data on the same page, with every disclosure governe
 visible. Record in an agent-capable browser (ChatGPT desktop app with site tools on, or
 Chrome with the experimental flag). Keep the disclosure log visible the whole time.
 
-Timings are a guide. The three moments that must land: **the gate blocking sensitive
-data**, **the human editing the agent's SQL**, and **the agent rejecting its own
-hypothesis**.
+Timings are a guide, and the script as written runs close to the 3-minute submission
+limit — see the runtime note further down for what to cut if you're over. The three
+moments that must land: **the gate blocking a direct raw-row request**, **the human
+editing the agent's SQL**, and **the agent rejecting its own hypothesis**.
 
 ---
 
@@ -28,23 +29,30 @@ Prompt: **"Output looks low. Break attainment down by shift and by line."** The 
 LINE-2 look worst. Let the agent state the obvious-but-wrong read: *the night shift is
 underperforming.*
 
-### 0:55 — The gate blocks sensitive data (25s) ⭐
+### 0:55 — Suppression (20s) ⭐
 Prompt: **"Get attainment grouped by operator_id and downtime_reason, filtered to
 LINE-2 Shift C."** (Grouping by `operator_id` alone won't trip suppression on this
 dataset — each operator has 11–16 runs on their own. Crossing it with
 `downtime_reason` produces small enough slices to hit the k=5 floor — tested: 3
 groups shared, 16 withheld.) The **k-anonymity floor withholds the small groups**,
-and the tool reports how many were suppressed. If the agent then calls
-`requestRows` for raw operator-level records, the **disclosure dialog** appears: it
-names `operator_id` as sensitive. **Click Deny.** A red `denied` entry lands in the
-log. Say: *"It doesn't get individual operator data — that stays on my side."*
+and the tool reports how many were suppressed.
 
-### 1:20 — Hypotheses on the board (20s)
+### 1:15 — The gate blocks a direct request (25s) ⭐
+Don't leave this to the agent's judgment — ask for it explicitly so the moment is
+reliable on camera. Click **LINE-2 night shift detail**, select 5 rows in the
+grid, then prompt: **"Call requestRows now for the 5 selected LINE-2 Shift C
+rows, including operator_id. Use the reason: 'Verify the disclosure-denial
+workflow.' Do not use an aggregate tool instead."** The **disclosure dialog**
+appears, naming `operator_id` as sensitive. **Click Deny.** A red `denied` entry
+lands in the log. Say: *"It doesn't get individual operator data — that stays on
+my side."*
+
+### 2:00 — Hypotheses on the board (20s)
 Prompt: **"Put up your two leading hypotheses."** The agent calls `addHypothesis` twice —
 e.g. *"night-shift staffing is the cause"* and *"a specific line/equipment issue is the
 cause."* Two open cards appear with confidence bars.
 
-### 1:40 — The human corrects the agent (25s) ⭐
+### 2:20 — The human corrects the agent (25s) ⭐
 Point out the trap: planned-maintenance downtime is inflating the night-shift numbers. In
 the SQL editor, **edit the agent's query yourself** to exclude it — add
 `WHERE downtime_reason <> 'Planned Maintenance'` — and run it. The grid updates on your
@@ -52,14 +60,20 @@ side. Prompt: **"I've excluded planned maintenance — re-read the workspace and
 The agent calls `getWorkspaceContext`, sees *your* edited SQL, and continues from it. This
 is the co-presence beat: it picked up a change you made on the page.
 
-### 2:05 — The agent rejects its own hypothesis (20s) ⭐
+### 2:45 — The agent rejects its own hypothesis (15s) ⭐
 With planned maintenance gone, the agent runs aggregates filtered to real faults and finds
 the loss concentrated on **LINE-2, C shift, during the fault window**, tracking low
 `filler_pressure_psi`. It calls `updateHypothesis`: **rejects** the staffing hypothesis and
 marks the **equipment** hypothesis supported, attaching the SQL as evidence. The cards flip
 status live.
 
-### 2:25 — Reproducible close (10s)
+**Runtime note:** this script as written runs close to 3 minutes total, which is the
+hard limit for the submission video. If you're over, cut here — the export step below
+is nice but not one of the three starred moments. If you need more room, tighten the
+0:00 framing and the 2:00 hypotheses beat first; both can run shorter without losing
+anything essential.
+
+### (Optional, if time allows) Reproducible close (10s)
 Prompt: **"Export the investigation."** `exportInvestigation` downloads the report. Scroll
 it briefly: every finding carries its SQL, and the disclosure ledger shows exactly what
 crossed — aggregates and one denied raw request, no raw sensitive rows. End on the log.
@@ -76,6 +90,7 @@ crossed — aggregates and one denied raw request, no raw sensitive rows. End on
 1. Read the workspace context and profile this dataset.
 2. Output looks low. Break attainment down by shift and by line.
 3. Get attainment grouped by operator_id and downtime_reason, filtered to LINE-2 Shift C.
-4. Put up your two leading hypotheses.
-5. *(after editing the SQL yourself)* I've excluded planned maintenance — re-read the workspace and re-evaluate.
-6. Export the investigation.
+4. *(after clicking "LINE-2 night shift detail" and selecting 5 rows)* Call requestRows now for the 5 selected LINE-2 Shift C rows, including operator_id. Use the reason: "Verify the disclosure-denial workflow." Do not use an aggregate tool instead.
+5. Put up your two leading hypotheses.
+6. *(after editing the SQL yourself)* I've excluded planned maintenance — re-read the workspace and re-evaluate.
+7. *(optional, if time allows)* Export the investigation.
