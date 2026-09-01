@@ -29,13 +29,15 @@ LINE-2 look worst. Let the agent state the obvious-but-wrong read: *the night sh
 underperforming.*
 
 ### 0:55 — The gate blocks sensitive data (25s) ⭐
-Prompt: **"Is it a specific operator? Pull the operator-level numbers for LINE-2 night
-shift."** The agent tries an operator-level aggregate — and the **k-anonymity floor
-withholds the small groups**. The tool tells the agent several groups were suppressed
-because they had fewer than five runs. If the agent then calls `requestRows` for the raw
-operator records, the **disclosure dialog** appears: it names `operator_id` as sensitive
-and warns the set is too small. **Click Deny.** A red `denied` entry lands in the log. Say:
-*"It doesn't get individual operator data — that stays on my side."*
+Prompt: **"Get attainment grouped by operator_id and downtime_reason, filtered to
+LINE-2 Shift C."** (Grouping by `operator_id` alone won't trip suppression on this
+dataset — each operator has 11–16 runs on their own. Crossing it with
+`downtime_reason` produces small enough slices to hit the k=5 floor — tested: 3
+groups shared, 16 withheld.) The **k-anonymity floor withholds the small groups**,
+and the tool reports how many were suppressed. If the agent then calls
+`requestRows` for raw operator-level records, the **disclosure dialog** appears: it
+names `operator_id` as sensitive. **Click Deny.** A red `denied` entry lands in the
+log. Say: *"It doesn't get individual operator data — that stays on my side."*
 
 ### 1:20 — Hypotheses on the board (20s)
 Prompt: **"Put up your two leading hypotheses."** The agent calls `addHypothesis` twice —
@@ -73,7 +75,7 @@ crossed — aggregates and one denied raw request, no raw sensitive rows. End on
 ## Prompts, copy-paste order
 1. Read the workspace context and profile this dataset.
 2. Output looks low. Break attainment down by shift and by line.
-3. Is it a specific operator? Pull the operator-level numbers for LINE-2 night shift.
+3. Get attainment grouped by operator_id and downtime_reason, filtered to LINE-2 Shift C.
 4. Put up your two leading hypotheses.
 5. *(after editing the SQL yourself)* I've excluded planned maintenance — re-read the workspace and re-evaluate.
 6. Export the investigation.

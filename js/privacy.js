@@ -99,6 +99,27 @@ export function noteReveal(on, columns) {
 
 const AGG_FNS = new Set(["sum", "avg", "min", "max", "count", "median", "stddev"]);
 
+// orderBy is agent-supplied text, so it gets the same treatment as where: never
+// interpolated as-is. Only identifiers that are actually columns of THIS query's
+// result (a dimension, "n", or a generated metric alias), each optionally
+// followed by ASC/DESC, comma-separated. Anything else is rejected outright.
+function buildOrderBy(orderBy, allowedCols) {
+  if (!orderBy) return "";
+  const clauses = [];
+  for (const raw of String(orderBy).split(",")) {
+    const part = raw.trim();
+    if (!part) continue;
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*(ASC|DESC)?$/i.exec(part);
+    if (!m) throw new Error(`Invalid orderBy clause: "${part}"`);
+    const [, col, dir] = m;
+    if (!allowedCols.has(col)) {
+      throw new Error(`orderBy references a column not in this result: "${col}"`);
+    }
+    clauses.push(`"${col}"${dir ? " " + dir.toUpperCase() : ""}`);
+  }
+  return clauses.length ? `ORDER BY ${clauses.join(", ")}` : "";
+}
+
 /**
  * Build and run a safe aggregate. The agent supplies dimensions + metrics by
  * NAME only; we assemble the SQL, force a COUNT(*), and drop any group under the
@@ -136,6 +157,10 @@ export async function discloseAggregate(spec) {
   }
 
   const dimSql = dims.map((d) => `"${d}"`).join(", ");
+  const metricAliases = metrics.map(
+    (m) => `${String(m.fn).toLowerCase()}_${m.column || "rows"}`.replace(/[^a-z0-9_]/gi, "_")
+  );
+  const allowedOrderCols = new Set([...dims, "n", ...metricAliases]);
   const selectParts = [
     ...(dims.length ? [dimSql] : []),
     "count(*) AS n",
@@ -144,7 +169,7 @@ export async function discloseAggregate(spec) {
   const groupBy = dims.length ? `GROUP BY ${dimSql}` : "";
   const where = spec.where ? `WHERE ${spec.where}` : "";
   const having = dims.length ? `HAVING count(*) >= ${K_ANON}` : "";
-  const orderBy = spec.orderBy ? `ORDER BY ${spec.orderBy}` : "";
+  const orderBy = buildOrderBy(spec.orderBy, allowedOrderCols);
   const limit = `LIMIT ${Math.min(Number(spec.limit) || 200, 1000)}`;
 
   const sql = `SELECT ${selectParts} FROM ${TABLE} ${where} ${groupBy} ${having} ${orderBy} ${limit}`;

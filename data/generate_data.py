@@ -15,9 +15,12 @@ something real for a human + agent to investigate together:
               window (low filler_pressure_psi -> Filler Jam -> lost units).
               It is a line/equipment problem, not a people problem.
 
-`operator_id` is the sensitive column. Some LINE-2 / C-shift slices have fewer
-than 5 runs per operator, so any operator-level aggregate trips the k-anonymity
-floor (k = 5) and forces the disclosure gate to do its job.
+`operator_id` is the sensitive column. Grouping by `operator_id` alone does NOT
+trip the k-anonymity floor on this dataset — each operator has 11-16 runs overall.
+Crossing it with a second dimension (e.g. `downtime_reason`, filtered to LINE-2 /
+C-shift) does: several of those combinations fall under 5 runs, which is what
+forces the disclosure gate to withhold groups (k = 5). Tested: grouping by
+[operator_id, downtime_reason] on LINE-2/C shares 3 groups and withholds 16.
 
 Run:  python3 generate_data.py
 Out:  production_runs.csv
