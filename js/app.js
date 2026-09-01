@@ -302,17 +302,32 @@ function renderGrid(result) {
   }
   const hasSensitiveCol = result.columns.some((c) => privacy.isSensitive(c));
   if (hasSensitiveCol) {
+    // An agent's own browser surface can read the page independent of our
+    // WebMCP tools (e.g. via screenshot/vision), so revealing is only offered
+    // when no agent is attached — that's the only way this checkbox is safe.
+    const agentPresent = webmcpStatus().available;
+    if (agentPresent) revealSensitiveEnabled = false;
+
     const controls = el("div", "grid-controls");
     const label = el("label", "reveal-toggle");
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = revealSensitiveEnabled;
+    cb.disabled = agentPresent;
     cb.addEventListener("change", () => {
       revealSensitiveEnabled = cb.checked;
+      const sensCols = result.columns.filter((c) => privacy.isSensitive(c));
+      privacy.noteReveal(revealSensitiveEnabled, sensCols);
       renderGrid(ws.getLastResult());
     });
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(" Reveal sensitive values (visible on screen only — not sent via any tool call, but still visible to anything that can read this page)"));
+    label.appendChild(
+      document.createTextNode(
+        agentPresent
+          ? " Reveal sensitive values — disabled while an agent is attached to this page"
+          : " Reveal sensitive values (visible on screen only — not sent via any tool call, but still visible to anything that can read this page)"
+      )
+    );
     controls.appendChild(label);
     scroll.appendChild(controls);
   }

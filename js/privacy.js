@@ -81,6 +81,20 @@ export function noteMetadata(summary, detail = {}) {
   return record("metadata", summary, detail);
 }
 
+// The on-screen "reveal sensitive values" toggle never sends anything to the
+// agent — no WebMCP tool reads it — but it does change what a human (or anything
+// else reading the rendered page) can see. That's still a disclosure-adjacent
+// action, so it gets its own ledger entry rather than being invisible.
+export function noteReveal(on, columns) {
+  return record(
+    "reveal",
+    on
+      ? `Sensitive values revealed on screen — columns [${columns.join(", ")}]`
+      : `Sensitive-value reveal turned off — columns [${columns.join(", ")}]`,
+    { on, columns }
+  );
+}
+
 // ---- aggregates with k-anonymity ---------------------------------------------
 
 const AGG_FNS = new Set(["sum", "avg", "min", "max", "count", "median", "stddev"]);
