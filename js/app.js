@@ -312,7 +312,7 @@ function renderGrid(result) {
       renderGrid(ws.getLastResult());
     });
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(" Reveal sensitive values (local only — never sent to the agent)"));
+    label.appendChild(document.createTextNode(" Reveal sensitive values (visible on screen only — not sent via any tool call, but still visible to anything that can read this page)"));
     controls.appendChild(label);
     scroll.appendChild(controls);
   }
