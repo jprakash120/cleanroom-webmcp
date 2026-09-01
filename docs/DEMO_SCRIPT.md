@@ -54,18 +54,22 @@ cause."* Two open cards appear with confidence bars.
 
 ### 2:20 — The human corrects the agent (25s) ⭐
 Point out the trap: planned-maintenance downtime is inflating the night-shift numbers. In
-the SQL editor, **edit the agent's query yourself** to exclude it — add
-`WHERE downtime_reason <> 'Planned Maintenance'` — and run it. The grid updates on your
-side. Prompt: **"I've excluded planned maintenance — re-read the workspace and re-evaluate."**
-The agent calls `getWorkspaceContext`, sees *your* edited SQL, and continues from it. This
-is the co-presence beat: it picked up a change you made on the page.
+the SQL editor, **edit the agent's query yourself** to exclude it — the active LINE-2/C
+query already has a `WHERE` clause, so add the condition with `AND`, inserted before
+`ORDER BY`:
+`AND downtime_reason <> 'Planned Maintenance'`
+— and run it. The grid updates on your side. Prompt: **"I've excluded planned
+maintenance. Re-read the workspace, reject the night-shift staffing hypothesis, mark the
+LINE-2/C filler-pressure fault hypothesis supported, and attach the current SQL as
+evidence."** (Naming the exact actions makes this reliable on camera rather than hoping
+the agent picks the right tools on its own.) The agent calls `getWorkspaceContext`, sees
+*your* edited SQL, and continues from it — this is the co-presence beat: it picked up a
+change you made on the page.
 
 ### 2:45 — The agent rejects its own hypothesis (15s) ⭐
-With planned maintenance gone, the agent runs aggregates filtered to real faults and finds
-the loss concentrated on **LINE-2, C shift, during the fault window**, tracking low
-`filler_pressure_psi`. It calls `updateHypothesis`: **rejects** the staffing hypothesis and
-marks the **equipment** hypothesis supported, attaching the SQL as evidence. The cards flip
-status live.
+Following the explicit instruction above, the agent calls `updateHypothesis` twice:
+**rejects** the staffing hypothesis and marks the **equipment** hypothesis supported,
+attaching the SQL as evidence. The cards flip status live.
 
 **Runtime note:** this script as written runs close to 3 minutes total, which is the
 hard limit for the submission video. If you're over, cut here — the export step below
@@ -92,5 +96,5 @@ crossed — aggregates and one denied raw request, no raw sensitive rows. End on
 3. Get attainment grouped by operator_id and downtime_reason, filtered to LINE-2 Shift C.
 4. *(after clicking "LINE-2 night shift detail" and selecting 5 rows)* Call requestRows now for the 5 selected LINE-2 Shift C rows, including operator_id. Use the reason: "Verify the disclosure-denial workflow." Do not use an aggregate tool instead.
 5. Put up your two leading hypotheses.
-6. *(after editing the SQL yourself)* I've excluded planned maintenance — re-read the workspace and re-evaluate.
+6. *(after editing the SQL yourself, adding `AND downtime_reason <> 'Planned Maintenance'` before `ORDER BY`)* I've excluded planned maintenance. Re-read the workspace, reject the night-shift staffing hypothesis, mark the LINE-2/C filler-pressure fault hypothesis supported, and attach the current SQL as evidence.
 7. *(optional, if time allows)* Export the investigation.
